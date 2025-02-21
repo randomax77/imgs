@@ -12,6 +12,7 @@ on:
 jobs:
   build:
     name: calibreapp/image-actions
+    permissions: write-all
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
