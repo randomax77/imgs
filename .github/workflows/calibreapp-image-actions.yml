@@ -37,7 +37,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "chore: compress images"
-          title: '🗜️ Compress Images (${{ github.sha }})'
+          title: 'Compress Images (${{ github.sha }})'
           body: |
             ## Image Compression Report
             
