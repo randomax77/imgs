@@ -8,30 +8,48 @@ on:
       - '**.jpeg'
       - '**.png'
       - '**.webp'
+
 jobs:
-  build:
-    name: calibreapp/image-actions
+  compress-and-report:
     runs-on: ubuntu-latest
-    permissions: write-all
+    permissions:
+      contents: write
+      pull-requests: write  # 需授予创建/合并 PR 的权限
     steps:
-      - name: Checkout Repo
+      - name: Checkout Code
         uses: actions/checkout@v4
-        
-      - name: Compress Images
-        id: calibre
+
+      - name: Compress Images (Changed Only)
+        id: compress
         uses: calibreapp/image-actions@main
         with:
           githubToken: ${{ secrets.GITHUB_TOKEN }}
           compressOnly: true
-          
-      - name: Create New Pull Request If Needed
-        if: steps.calibre.outputs.markdown != ''
+          paths: |  # 仅处理本次提交中变更的图片
+            ${{ github.event.commits[0].added }}
+            ${{ github.event.commits[0].modified }}
+
+      - name: Create Report PR
+        if: steps.compress.outputs.markdown != ''
         uses: peter-evans/create-pull-request@v4
+        id: create-pr
         with:
-          title: Compressed Images
-          branch: compress-images
-          delete-branch: true
-          # commit-message: Compressed Images
-          body: ${{ steps.calibre.outputs.markdown }}
-          auto-merge: true
-          merge-method: squash
+          token: ${{ secrets.PAT_TOKEN }}  # 必须使用 PAT，不能用 GITHUB_TOKEN
+          commit-message: "chore: compress images (auto)"
+          title: "🖼️ Auto Image Compression Report"
+          body: |
+            ### 图片压缩报告
+            ${{ steps.compress.outputs.markdown }}
+            ---
+            **自动化流程**：本 PR 将在 10 秒后自动合并。
+          branch: "auto-compress/$(date +%s)"  # 用时间戳确保分支唯一
+          delete-branch: true  # 合并后自动删除分支
+
+      - name: Auto Merge PR
+        if: steps.create-pr.outputs.pull-request-number != ''
+        run: |
+          # 等待 10 秒确保 PR 创建完成
+          sleep 10
+          gh pr merge ${{ steps.create-pr.outputs.pull-request-number }} --merge --auto
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
