@@ -11,13 +11,29 @@ on:
       
 jobs:
   build:
-    name: calibreapp/image-actions
+    name: Compress Images
     runs-on: ubuntu-latest
     permissions: write-all
     
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整的git历史
+
+      # 获取本次提交变更的图片文件
+      - name: Get changed files
+        id: changed
+        run: |
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep -E '\.(jpg|jpeg|png|webp)$' || true)
+          echo "files=$CHANGED_FILES" >> $GITHUB_OUTPUT
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+      # 确保新的分支基于最新的main
+      - name: Create fresh branch
+        run: |
+          git checkout -b compress-images-${{ github.sha }}
         
       - name: Compress Images
         id: calibre
@@ -31,15 +47,22 @@ jobs:
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore: compress images"
-          title: 'Compressed Images'
+          commit-message: "chore: compress images from ${{ github.sha }}"
+          title: '🗜️ Compress Images (Push ${{ github.sha }})'
           body: |
-            Image Compression Report:
+            ## Image Compression Report
+            
+            ### Changed Files in this Push:
+            ```
+            ${{ steps.changed.outputs.files }}
+            ```
+            
+            ### Compression Results:
             ${{ steps.calibre.outputs.markdown }}
             
             This PR contains compressed images to reduce file sizes while maintaining quality.
-          branch: compress-images
-          branch-suffix: timestamp
+            Triggered by commit: ${{ github.sha }}
+          branch: compress-images-${{ github.sha }}
           delete-branch: true
           labels: |
             compression
