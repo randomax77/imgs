@@ -51,3 +51,5 @@ jobs:
             compression
             automated
           base: main
+          auto-merge: true
+          auto-merge-method: squash
