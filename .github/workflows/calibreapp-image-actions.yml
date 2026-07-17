@@ -8,48 +8,32 @@ on:
       - '**.jpeg'
       - '**.png'
       - '**.webp'
-      
+
 jobs:
   build:
     name: Compress Images
     runs-on: ubuntu-latest
-    permissions: write-all
-    
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Generate Branch Name
-        id: branch-name
-        run: |
-          echo "name=compress-images-$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
-        
       - name: Compress Images
-        id: calibre
         uses: calibreapp/image-actions@main
         with:
           githubToken: ${{ secrets.GITHUB_TOKEN }}
           compressOnly: true
-          
-      - name: Create Pull Request
-        if: steps.calibre.outputs.markdown != ''
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore: compress images"
-          title: 'Compress Images (${{ github.sha }})'
-          body: |
-            ## Image Compression Report
-            
-            ### Compression Results:
-            ${{ steps.calibre.outputs.markdown }}
-            
-            Triggered by commit: ${{ github.sha }}
-          branch: ${{ steps.branch-name.outputs.name }}
-          delete-branch: true
-          labels: |
-            compression
-            automated
-          base: main
-          auto-merge: true
-          auto-merge-method: squash
+
+      - name: Commit compressed images
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No images were compressed."
+          else
+            git commit -m "chore: compress images [skip ci]"
+            git push
+          fi
