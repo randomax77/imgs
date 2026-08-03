@@ -1,4 +1,5 @@
 name: Compress Images on Push to main branch
+
 on:
   push:
     branches:
@@ -8,6 +9,11 @@ on:
       - '**.jpeg'
       - '**.png'
       - '**.webp'
+
+# 同一分支同一时刻只允许一个 run 在跑，后来的排队等待（不要取消，否则会漏压缩）
+concurrency:
+  group: compress-images-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -19,6 +25,11 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
+        with:
+          # 取分支的最新 tip，而不是触发这次事件的那个旧 SHA
+          ref: ${{ github.ref_name }}
+          # rebase 需要完整历史，默认的浅克隆（depth=1）会出问题
+          fetch-depth: 0
 
       - name: Compress Images
         uses: calibreapp/image-actions@main
@@ -26,14 +37,34 @@ jobs:
           githubToken: ${{ secrets.GITHUB_TOKEN }}
           compressOnly: true
 
-      - name: Commit compressed images
+      - name: Commit and push compressed images
+        env:
+          BRANCH: ${{ github.ref_name }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
+
           git add -A
           if git diff --staged --quiet; then
             echo "No images were compressed."
-          else
-            git commit -m "chore: compress images [skip ci]"
-            git push
+            exit 0
           fi
+
+          git commit -m "chore: compress images [skip ci]"
+
+          for attempt in 1 2 3 4 5; do
+            if git push origin "HEAD:$BRANCH"; then
+              echo "Pushed successfully on attempt $attempt."
+              exit 0
+            fi
+
+            echo "Push rejected. Rebasing onto latest origin/$BRANCH and retrying..."
+            git fetch origin "$BRANCH"
+            # -X theirs：万一同一张图两边都压过，保留本次压缩的结果
+            git rebase -X theirs "origin/$BRANCH"
+
+            sleep $(( (RANDOM % 5) + 2 ))
+          done
+
+          echo "Still failing after 5 attempts."
+          exit 1
